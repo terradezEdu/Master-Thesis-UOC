@@ -31,7 +31,7 @@ tested methods in Python.
 The folder structure is a copy of the structure I used in Google Drive. Please change the path in the code before changing the folder structure.
 
 
-## These implementations are inspired by:
+## The code implementations are inspired by:
 - [Deep Reinforcement Learning Hands-On](https://github.com/PacktPublishing/Deep-Reinforcement-Learning-Hands-On-Second-Edition)
 - [Phil Tabor](https://github.com/philtabor)
 - [Petros Christodoulou](https://github.com/p-christ)
