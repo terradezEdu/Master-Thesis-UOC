@@ -1,7 +1,10 @@
-"""
-Created on Tue Apr  6 10:11:36 2021
+""" DDPG Agent. 
 
-@author: Eduardo garcía
+Implementation of the DDPG Agent
+
+author: Eduardo Terrádez
+year: 2021
+
 """
 import os
 import torch as T
@@ -10,26 +13,23 @@ import torch.optim as optim
 import torch.nn as nn
 import pandas as pd
 from models import model_DDPG
-#from utilities.utilities import ExperienceBuffer
 from models.buffer import ReplayBuffer
-
 from copy import deepcopy, copy
 import numpy as np
 from gym.wrappers import Monitor
-
+import base64
 
 
 #tensordboard
 from torch.utils.tensorboard import SummaryWriter
 
-
-import base64
-
 device = T.device("cuda:0" if T.cuda.is_available() else "cpu")
 
+#Path directories from Google Drive
 PATH_TENSORDBOARD= '/content/drive/MyDrive/TFM/TENSORDBOARD/DDPG'
 VIDEO_PATH= '/content/drive/MyDrive/TFM/Video/DDPG/episode/'
 
+#create the SummaryWriter for tensorboard
 writer = SummaryWriter(log_dir=PATH_TENSORDBOARD)
 
 
@@ -42,7 +42,21 @@ class DDPGAgent:
                  actor_lr=1e-4, critic_lr=1e-3, 
                  gamma=0.99, tau=1e-3, nblock=300, max_step=2000, max_reward=300,
                  max_size= 100000):
-        # Parameters
+        """
+        Parameters:
+        env: environment to training the agent
+        noise: Noise method from models/class Orn_Uhlen
+        hidden_size1: nº of neurons in the first layer
+        hidden_size2: nº of neurons in the second layer
+        actor_lr: actor's networks learning rate
+        critic_lr: critic's networks learning rate
+        gamma: gamma parameter "target Q-values"
+        tau: tau parameter "conservative policy iteration"
+        nblock: nº of episodes to calculate the avg. rewards
+        max_step: max. to complete the episode
+        max_rewards: rewards' threshold
+        max_size: max. size buffer experience replay
+        """
         self.num_states= env.observation_space.shape
         self.num_actions= env.action_space.shape[0]
         self.gamma= gamma
@@ -53,7 +67,6 @@ class DDPGAgent:
         self.max_step= max_step
         self.max_reward= max_reward
         self.memory = ReplayBuffer(max_size, self.num_states, self.num_actions)
-
         self.hidden_size1= hidden_size1
         self.hidden_size2= hidden_size2
         self.actor_lr= actor_lr
@@ -62,8 +75,15 @@ class DDPGAgent:
         self.initialize()
 
     def initialize(self):
-        self.total_reward= 0
-        self.step_count= 0
+        """
+        Initialize:
+        control variables
+        environments
+        ANNs
+        Optimizers
+        """
+        self.total_reward= 0 #variable to control the cum. sum rewards
+        self.step_count= 0 # variable to control the nº steps
         self.state = self.env.reset()
         self.training_rewards= []
         # ANNs
@@ -80,23 +100,25 @@ class DDPGAgent:
                                        lr=self.critic_lr)
         
         self.critic_criterion= nn.MSELoss()
-        # Buffer
-        
-        
+
     def get_action(self, state):
+        """
+        Get actions from the actor
+        """
         state= T.from_numpy(state).float().unsqueeze(0).to(device)
         action= self.actor.forward(state)
         action= action.detach().cpu().numpy().reshape(-1)
         return action
         
     def update(self, batch_size):
+        # Get samples from buffer replay
         states, actions, rewards, next_states, _ = self.memory.sample_buffer(batch_size)
         states= T.FloatTensor(states).to(device)
         actions= T.FloatTensor(actions).to(device)
         rewards= T.FloatTensor(rewards).to(device)
         next_states= T.FloatTensor(next_states).to(device)
         
-        # Critic loss        
+        # Critic loss
         Qvals= self.critic.forward(states, actions)
         next_actions= self.target_actor.forward(next_states)
         next_Q= self.target_critic.forward(next_states, next_actions.detach())
@@ -136,7 +158,7 @@ class DDPGAgent:
         else:           
             action= self.get_action(self.state) # action propose by actor
             action= self.noise.get_action(action)
-            self.step_count += 1
+            self.step_count += 1 
 
         
 
@@ -154,6 +176,9 @@ class DDPGAgent:
         return done
 
     def soft_update(self):
+        """
+        Update parameters from target networks and main networks
+        """
         for target_param, param in zip(self.target_actor.parameters(), 
                                self.actor.parameters()):
             target_param.data.copy_(target_param.data * (1.0 - self.tau) + param.data * self.tau)
@@ -166,7 +191,7 @@ class DDPGAgent:
 
     def train(self, max_episodes=5000, 
               batch_size=32, max_buffer=50000):
-        
+        # initialize arrays to store the loss functions values
         loss_actor_ep= []
         loss_critic_ep= []
         # Filling in the buffer replay with random actions
@@ -200,31 +225,35 @@ class DDPGAgent:
 
                     self.training_rewards.append(self.total_reward) # append rewards
                     mean_rewards= np.mean(self.training_rewards[-self.nblock:]) # mean rewards
-                    mean_act_loss= np.mean(episode_act_loss)
-                    mean_crt_loss= np.mean(episode_crt_loss)
-                    loss_actor_ep.append(mean_act_loss)
-                    loss_critic_ep.append(mean_crt_loss)
+                    mean_act_loss= np.mean(episode_act_loss) #mean actor loss
+                    mean_crt_loss= np.mean(episode_crt_loss) # mean critic loss
+                    loss_actor_ep.append(mean_act_loss) # append mean actor loss per episode
+                    loss_critic_ep.append(mean_crt_loss) # append mean critic loss per episode
 
                     print("\rEpisode {:d} Mean Rewards {:.2f} \t\t".format(
                         episode, mean_rewards), end="")
                     
+                    #add to tensorboard
                     writer.add_scalar("Mean rewards", mean_rewards, episode)
                     writer.add_scalar("Mean actor loss", mean_act_loss, episode)
                     writer.add_scalar("Mean critic loss", mean_crt_loss, episode)
                     self.step_count= 0
 
                     if episode % 100 == 0:
-                        
+                        #Save models and csv with rewards and loss functions
                         self.save_models()
                         df_rewards = pd.DataFrame ()
                         df_loss = pd.DataFrame ()
                         df_rewards['training_rewards']= self.training_rewards
                         df_loss['episode_actor_loss']= loss_actor_ep
                         df_loss['episode_critic_loss']= loss_critic_ep
+                        # ----------NOTICE: changes path to save the info-----------
                         df_rewards.to_csv('/content/drive/MyDrive/TFM/models/save/DDPG/df_ddpg_rewards.csv' , index=False)
                         df_loss.to_csv('/content/drive/MyDrive/TFM/models/save/DDPG/df_ddpg_loss.csv' , index=False)
                         path= VIDEO_PATH + str(episode)
-                        print(path)
+                        #print(path)
+                        
+                        #Record episode in mp4
                         env_video = Monitor(self.env, directory= path, force=True, video_callable=lambda episode: True)
                         obs= env_video.reset()
                         
@@ -235,7 +264,7 @@ class DDPGAgent:
                             obs, r, done, _ = env_video.step(action)
                             
                         env_video.close()
-
+                
                 if episode >= max_episodes:
                         training= False
                         print('\nEpisode limit reached.')
