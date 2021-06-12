@@ -1,6 +1,6 @@
 # Exploring the continuous actions spaces through the BipedalWalker-v3 environment
 
-This work is the result of my master thesis in data science  (Universitat Oberta de Catalunya UOC - 2021)  and contains all the code used. In this Github, you can find implementations of DDPG, PPO, SAC and TD3 for the BidepalWalker-V3. 
+This work is the result of my master thesis in data science  (Universitat Oberta de Catalunya UOC - 2021)  and contains all the code used. In this Github, you can find implementations of [DDPG](https://arxiv.org/pdf/1509.02971.pdf), [PPO](https://arxiv.org/pdf/1707.06347.pdf), [SAC](https://arxiv.org/abs/1801.01290) and [TD3](https://arxiv.org/abs/1802.09477) for the BidepalWalker-V3. 
 
 ## Abstract
 
