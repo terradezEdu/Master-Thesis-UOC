@@ -32,7 +32,7 @@ tested methods in Python.
 
 ### TENSORBOARD
 
- Path for the writesummary for each algorithm in the next folders:
+ Path for the writesummary:
 
 - TENSORBOARD/DDPG
 - TENSORBOARD/PPO
@@ -41,7 +41,7 @@ tested methods in Python.
 - TENSORBOARD/TD3_exp (TD3 after improvements)
 
 ### Video
-Path for recordings of the episodes.
+episodes recordings.
 
 - Video/DDPG/episodes
 - Video/PPO/episodes
