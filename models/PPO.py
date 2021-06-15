@@ -1,3 +1,12 @@
+""" DDPG Agent. 
+
+PPO full implementation
+
+author: Eduardo Terrádez
+year: 2021
+
+"""
+
 import os
 import numpy as np
 import torch as T
@@ -14,12 +23,17 @@ from pyvirtualdisplay import Display
 #tensordboard
 from torch.utils.tensorboard import SummaryWriter
 
+#Paths
 PATH_TENSORDBOARD= '/content/drive/MyDrive/TFM/TENSORDBOARD/PPO'
 VIDEO_PATH= '/content/drive/MyDrive/TFM/Video/PPO/episode/'
 writer = SummaryWriter(log_dir=PATH_TENSORDBOARD)
 PATH= '/content/drive/MyDrive/TFM/models/save'
 
 class PPOMemory:
+    '''
+    Buffer replay for PPO.
+    
+    '''
     def __init__(self, batch_size):
         self.states = []
         self.probs = []
@@ -61,80 +75,139 @@ class PPOMemory:
         self.dones = []
         self.vals = []
 
+#---MODELS---
+
 class Actor(nn.Module):
-    def __init__(self, n_actions, input_dims, lr_ac,
-            fc1_dims=256, fc2_dims=256, save_dir= PATH, cov_var=0.5, name='actor'):
+    '''
+    Actor model
+    '''
+    def __init__(self, n_actions, input_dims, actor_lr,
+            hidden_size1=256, hidden_size2=256, save_dir= PATH, cov_var=0.5, name='actor'):
+        """
+        Construct Actor class with the parameters:
+        input_dims: observation space dimentions
+        hidden_size1: nº of neurons in the first layer
+        hidden_size2: nº of neurons in the second layer
+        actor_lr: actor's networks learning rate
+        save_dir: Path to save the weights
+        cov_var: value of covariance's matrix
+        name: netowork's name
+        """
         super(Actor, self).__init__()
 
         self.save_dir= save_dir
         self.save_file= os.path.join(self.save_dir, name+'_PPO')
         self.cov_var = T.full(size=(n_actions,), fill_value=cov_var)
         self.actor = nn.Sequential(
-                nn.Linear(*input_dims, fc1_dims),
+                nn.Linear(*input_dims, hidden_size1),
                 nn.ReLU(),
-                nn.Linear(fc1_dims, fc2_dims),
+                nn.Linear(hidden_size1, hidden_size2),
                 nn.ReLU(),
-                nn.Linear(fc2_dims, n_actions),
+                nn.Linear(hidden_size2, n_actions),
                 nn.Tanh())
 
-        self.optimizer = optim.Adam(self.parameters(), lr=lr_ac)
+        self.optimizer = optim.Adam(self.parameters(), lr=actor_lr)
         self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
         self.to(self.device)
 
 
     def forward(self, state):
+        '''
+        Calculate the multivariete normal distribution of the actions
+        '''
         mu    = self.actor(state)
         cov_mat = T.diag(self.cov_var).to(self.device)
         dist = MultivariateNormal(mu, cov_mat) 
         return dist
 
     def save_checkpoint(self):
+        """
+        Save the weights in the Path
+        """
         T.save(self.state_dict(), self.save_file)
 
     def load_checkpoint(self):
+        """
+        load the weights in the Path
+        """
         self.load_state_dict(T.load(self.save_file))
 
+
 class Critic(nn.Module):
-    def __init__(self, input_dims, lr_critic, fc1_dims=256, fc2_dims=256,
+    '''
+    Critic model
+    '''
+    def __init__(self, input_dims, critic_lr, hidden_size1=256, hidden_size2=256,
              save_dir= PATH, name='critic'):
+        """
+        Construct critic class with the parameters
+        
+        input_dims: size of the observation space
+        hidden_size1: nº of neurons in the firts layer
+        hidden_size2: nº of neurons in the second layer
+        name: name to save the network
+        save_dir: path to save the weights
+        """
         super(Critic, self).__init__()
 
         self.save_dir= save_dir
         self.save_file= os.path.join(self.save_dir, name+'_PPO')
         
         self.critic = nn.Sequential(
-                nn.Linear(*input_dims, fc1_dims),
+                nn.Linear(*input_dims, hidden_size1),
                 nn.ReLU(),
-                nn.Linear(fc1_dims, fc2_dims),
+                nn.Linear(hidden_size1, hidden_size2),
                 nn.ReLU(),
-                nn.Linear(fc2_dims, 1)
+                nn.Linear(hidden_size2, 1) #the output size is always 1
         )
 
-        self.optimizer = optim.Adam(self.parameters(), lr=lr_critic)
+        self.optimizer = optim.Adam(self.parameters(), lr=critic_lr)
         self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
         self.to(self.device)
 
     def forward(self, state):
+        '''
+        Value function approximation
+        '''
         value = self.critic(state)
 
         return value
 
     def save_checkpoint(self):
+        """
+        Save the weights in the Path
+        """
         T.save(self.state_dict(), self.save_file)
 
     def load_checkpoint(self):
+        """
+        load the weights in the Path
+        """
         self.load_state_dict(T.load(self.save_file))
 
 class Agent:
-    def __init__(self, n_actions, input_dims, gamma=0.95, lr_ac=0.001, lr_critic=0.0003 ,gae_lambda=0.95,
-            policy_clip=0.2, batch_size=32, n_epochs=10, fc1_dims=256, fc2_dims=256):
+    def __init__(self, n_actions, input_dims, gamma=0.95, actor_lr=0.001, critic_lr=0.0003 ,gae_lambda=0.95,
+            policy_clip=0.2, batch_size=32, n_epochs=10, hidden_size1=256, hidden_size2=256):
+        """
+        Parameters:
+            n_actions: nº of actions in the environment
+            input_dims: dims observation space
+            gamma: constraint to calculate de advantage rewards
+            actor_lr: actor's learning rate
+            critic_lr: critic's learning rate
+            gae_lambda: constrait to calculate the generalized advantage estimation
+            policy_clip: constrait to clip the surrogate objetive function
+            n_epochs: nº of epochs to calculate the loss
+            hidden_size1: nº of neurons in the first layer
+            hidden_size2: nº of neurons in the second layer
+        """
         self.gamma = gamma
         self.policy_clip = policy_clip
         self.n_epochs = n_epochs
         self.gae_lambda = gae_lambda
 
-        self.actor = Actor(n_actions, input_dims, lr_ac=lr_ac)
-        self.critic = Critic(input_dims, lr_critic= lr_critic)
+        self.actor = Actor(n_actions, input_dims, actor_lr=actor_lr)
+        self.critic = Critic(input_dims, critic_lr= critic_lr)
         self.memory = PPOMemory(batch_size)
         
     def remember(self, state, action, probs, vals, reward, done):
@@ -165,14 +238,23 @@ class Agent:
         return actions, probs, value
 
     def update(self):
+        '''
+        Update the loss functions 
+        '''
         for _ in range(self.n_epochs):
+            """
+            Generate the minibatch
+            """
             state_arr, action_arr, old_prob_arr, vals_arr,\
             reward_arr, dones_arr, batches = self.memory.generate_batches()
 
             values = vals_arr
             advantage = np.zeros(len(reward_arr), dtype=np.float32)
-
+            
             for t in range(len(reward_arr)-1):
+                """
+                Calculate the advantage rewards
+                """
                 discount = 1
                 a_t = 0
                 for k in range(t, len(reward_arr)-1):
@@ -195,16 +277,19 @@ class Agent:
 
                 new_probs = dist.log_prob(actions)
                 prob_ratio = new_probs.exp() / old_probs.exp()
-                #prob_ratio = (new_probs - old_probs).exp()
+                
+                # calculate surrogate losses
                 weighted_probs = advantage[batch] * prob_ratio
                 weighted_clipped_probs = T.clamp(prob_ratio, 1-self.policy_clip,
                         1+self.policy_clip)*advantage[batch]
+                
+                # Calculate actor and critic losses
                 actor_loss = -T.min(weighted_probs, weighted_clipped_probs).mean()
-
                 returns = advantage[batch] + values[batch]
                 critic_loss = (returns-critic_value)**2
                 critic_loss = critic_loss.mean()
-
+                
+                # Another loss to evaluate the performance
                 total_loss = actor_loss + 0.2*critic_loss
                 self.actor.optimizer.zero_grad()
                 self.critic.optimizer.zero_grad()
@@ -217,6 +302,16 @@ class Agent:
 
     def train(self, env, max_episode=1000, batch_size=32, N=320, max_steps= 2000,
     nblock=100):
+            """
+            Training the agent.
+            Parameters:
+                env: environment to training the agent
+                N: number of steps to calculate the losses
+                max_episode: nº of episodes to train
+                batch_size: nº of batch to update the loss
+                max_buffer: nº of max samples storage in the buffer
+                nblock: nº of episodes to calculate the mean rewards
+            """
             
             training_rewards= []
             episode = 0

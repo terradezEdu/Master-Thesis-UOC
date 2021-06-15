@@ -191,6 +191,13 @@ class DDPGAgent:
 
     def train(self, max_episodes=5000, 
               batch_size=32, max_buffer=50000):
+        """
+        Training the agent.
+        Parameters:
+        max_episode: nº of episodes to train
+        batch_size: nº of batch to update the loss
+        max_buffer: nº of max samples storage in the buffer
+        """
         # initialize arrays to store the loss functions values
         loss_actor_ep= []
         loss_critic_ep= []
