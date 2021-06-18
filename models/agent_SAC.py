@@ -22,6 +22,9 @@ writer = SummaryWriter(log_dir=PATH_TENSORDBOARD)
 device = T.device("cuda:0" if T.cuda.is_available() else "cpu")
 
 class Agent():
+    """
+    Implementation of the agent SAC
+    """
     def __init__(self, lr_ac=0.0003, lr_cr=0.0003, input_dims=[8],
             env=None, gamma=0.99, n_actions=2, max_size=1000000, tau=0.005,
             layer1_size=256, layer2_size=256, batch_size=100, reward_scale=2, alpha=1):
@@ -108,7 +111,7 @@ class Agent():
         critic_value = critic_value.view(-1)
 
         self.value.optimizer.zero_grad()
-        value_target = critic_value - log_probs
+        value_target = critic_value - self.alpha*log_probs
         value_loss = 0.5 * F.mse_loss(value, value_target)
         value_loss.backward(retain_graph=True)
         self.value.optimizer.step()
