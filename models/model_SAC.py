@@ -58,6 +58,9 @@ class Critic(nn.Module):
         self.load_state_dict(T.load(self.save_file))
 
 class ValueAnn(nn.Module):
+    '''
+    Estimation of the value function
+    '''
     def __init__(self, lr, input_dims, hidden_size1=256, hidden_size2=256,
             name='value', save_dir=PATH):
         """
